@@ -1,3 +1,4 @@
+# Importing all required modules
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter.ttk import Progressbar
@@ -7,26 +8,31 @@ import os
 import time
 import json
 
+
+# Connecting the printer
 printer = USBConnection()
 
+
+# Getting allconfig information in the form of json to retreive value, range and access of an sgd
 printer.send(b'{}{"allconfig":null}')
 data = printer.collect(10)
-
 decoded_str = data.decode('utf-8')
-
 json_data = json.loads(decoded_str)["allconfig"]
 
 
+# Function to select the firmware from file explorer
 def browse_firmware():
     messagebox.showinfo("Check your firmware","Ensure you are trying to upload a compatible firmware")
     filepath = filedialog.askopenfilename(
-        filetypes=[("Firmware Files","*.zpl")],
+        filetypes=[("Firmware Files","*.zpl")], #Allowing only .zpl files to be selected
         title="Select Firmware File",
     )
     if filepath:
-        firmware_entry.delete(0, tk.END)
+        firmware_entry.delete(0, tk.END) #Removing any other text or old file path entered and setting the newly selected path
         firmware_entry.insert(0, filepath)
 
+
+# Function to check if the path of the file is valid or not
 def validate_firmware(filepath):
     if not os.path.exists(filepath):
         return "File does not exist."
@@ -36,9 +42,13 @@ def validate_firmware(filepath):
         return "File is empty."
     return None
 
+
+# Function to return the size of the data sent - used in progress bar
 def format_size(size_in_bytes):
     return f"{size_in_bytes / (1024 * 1024):.2f} MB"
 
+
+#Sets the progress bar to 0 and starts sending the data. Receives the information on how much data is sent through the tx_data_hook
 def upload_firmware(filepath):
     try:
         file_size = os.path.getsize(filepath)
@@ -82,6 +92,7 @@ def upload_firmware(filepath):
         About_section.config(text="")
         printer.wait_for_reset()
 
+        # Enabling disabled buttons after printer has restarted after firmware upload
         apply_firmware_btn.config(state="normal")
         configure_btn.config(state="normal")
         sgd_submit.config(state="normal")
@@ -94,10 +105,13 @@ def upload_firmware(filepath):
     except Exception as e:
         messagebox.showerror("Error", f"Failed to upload firmware: {e}")
 
+
+# Function to upload firmware and also disabling other functionalities when firmware is being uploaded
 def apply_firmware():
     filepath = firmware_entry.get()
     validation_error = validate_firmware(filepath)
 
+    # Disabling other buttons
     apply_firmware_btn.config(state="disabled")
     configure_btn.config(state="disabled")
     sgd_submit.config(state="disabled")
@@ -107,10 +121,12 @@ def apply_firmware():
         messagebox.showerror("Error", validation_error)
         return
 
-    # Run the upload process in a separate thread to prevent GUI freezing
+    # Running the upload process in a separate thread to prevent GUI freezing
     upload_thread = threading.Thread(target=upload_firmware, args=(filepath,))
     upload_thread.start()
 
+
+# Function to get wifi configuration values entered and setting then to the printer values using setvar after sending a ~WR command
 def configure_wifi():
     essid = essid_entry.get()
     security = security_entry.get()
@@ -131,6 +147,7 @@ def configure_wifi():
     except Exception as e:
         messagebox.showerror("Error", f"Failed to configure Wi-Fi: {e}")
 
+# FUnction to check if the printer is connected to the wifi.
 def check_connection():
     def monitor_connection():
         while True:
@@ -139,7 +156,7 @@ def check_connection():
                 connection_status.set("Connected" if status == "yes" else "Not Connected")
                 root.update_idletasks()
                 if status == "yes":
-                    break  # Stop checking once connected
+                    break  # Stops checking once connected
             except Exception as e:
                 connection_status.set("Error checking status")
                 break
@@ -147,6 +164,8 @@ def check_connection():
 
     threading.Thread(target=monitor_connection, daemon=True).start()
 
+
+# Function to handle all sgd related tasks
 def handle_sgd():
     sgd = sgd_entry.get()
 
@@ -161,16 +180,19 @@ def handle_sgd():
         for widget in input_frame.winfo_children():
             widget.destroy()
 
+        # Only displays the sgd value
         if access == "R":
             validate_label.config(text=f"Value: {value}. (This SGD is read-only).")
             # change_sgd_entry.config(state="disabled")
             sgd_submit.config(state="disabled")
 
+        # Tells the user that this is only Write mode
         elif access == "W":
             messagebox.showinfo("Error", "This SGD is write-only. ")
             # change_sgd_entry.config(state="disabled")
             sgd_submit.config(state="disabled")
 
+        # Based on the sgd type shows possible options
         elif access == "RW":
             # change_sgd_entry.config(state="normal")
             sgd_submit.config(state="normal")
@@ -236,6 +258,7 @@ def handle_sgd():
 
                 sgd_submit.config(command=update_integer)
 
+            # If SGD not int, enum or bool, shows that its type is unsupported
             else:
                 validate_label.config(text=f"Unsupported SGD type: {sgd_type}.")
                 # change_sgd_entry.config(state="disabled")
@@ -245,17 +268,20 @@ def handle_sgd():
         validate_label.config(text="SGD does not exist.")
 
 
+# GUI codes starts
 root = tk.Tk()
 root.title("Printer Interaction Software ")
 root.geometry("700x600")
 
-
+# Head section
 Head_section=tk.Label(root,text=f"You are using a {printer.getvar('device.product_name')}", font=("Arial",14,"bold"))
 Head_section.pack(fill = tk.X, pady=10)
 
 About_section=tk.Label(root,text=f"{printer.getvar('ip.dhcp.vendor_class_id')}", font=("Arial",14))
 About_section.pack(fill = tk.X, pady=10)
 
+
+# Firmware flashing section
 firmware_frame = tk.LabelFrame(root, text="Firmware Download", font=("Arial", 14, "bold"))
 firmware_frame.pack(fill=tk.X, padx=10, pady=10)
 
@@ -277,6 +303,8 @@ progress_bar.grid(row=2, column=0, columnspan=3, pady=10)
 progress_label = tk.Label(firmware_frame, text="Progress is displayed here", font=("Arial", 12))
 progress_label.grid(row=3, column=0, columnspan=3, pady=5)
 
+
+# Wifi Configuration section
 wifi_frame = tk.LabelFrame(root, text="Wi-Fi Configuration", font=("Arial", 14, "bold"))
 wifi_frame.pack(fill=tk.X, padx=10, pady=10)
 
@@ -308,6 +336,8 @@ status_label.pack(pady=5)
 status_value = tk.Label(root, textvariable=connection_status, font=("Arial", 14, "bold"))
 status_value.pack(pady=5)
 
+
+# SGD validation and setting section
 SGD_Validation = tk.LabelFrame(root, text="SGD Validation", font=("Arial", 14, "bold"))
 SGD_Validation.pack(fill=tk.X, padx=10, pady=10)
 
@@ -336,7 +366,7 @@ sgd_submit = tk.Button(SGD_Validation, text="Submit",  font=("Arial",12), state=
 sgd_submit.grid(row=2,column=2,padx=5,pady=5,)
 
 
-
+# Running this fucntion here to check if the printer is already connected to a wifi before configuration
 check_connection()
 
 root.mainloop()
